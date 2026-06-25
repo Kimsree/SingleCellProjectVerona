@@ -64,7 +64,7 @@ Cell-Cell Communication Analysis
 Trajectory Inference
 ```
 
-Analysis Steps
+## Analysis Steps
 1. Quality Control
 
 Initial filtering is performed to remove:
@@ -145,7 +145,8 @@ Lineage relationships
 
 ---
 
-Main R Packages
+## Main R Packages
+
 |Package |	Purpose |
 | ----------- | ----------- |
 |Seurat	Single-cell | data processing and visualization|
@@ -156,7 +157,7 @@ Main R Packages
 |SingleCellExperiment |	Data structure for single-cell analyses|
 
 ---
-Installation
+## Installation
 
 Install the required packages in R:
 ```
@@ -177,7 +178,8 @@ Additional packages may be required depending on the analysis modules.
 
 ---
 
-Example Analyses
+## Example Analyses
+
 Identification of cellular populations
 Annotation of immune and stromal cells
 Analysis of CD4 T-cell interactions
@@ -187,7 +189,8 @@ Investigation of differentiation processes
 
 ---
 
-Project Structure
+## Project Structure
+
 ```
 project/
 │
@@ -200,6 +203,7 @@ project/
 ```
 ---
 
-Authors
+## Authors
+
 Sreevatsa
 Akshaya
