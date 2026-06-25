@@ -1,0 +1,827 @@
+---
+title: "Projet Multi-omics Single Cell"
+author: "Sreevatsa and Akshaya"
+date: "2024-10-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Multi-Omics Single Analysis
+
+## Quality Control
+
+Load Library:
+
+```{r loading}
+# Setting up environment ===================================================
+
+# Clean environment
+rm(list=ls())
+rm(list = ls(all.names = TRUE)) # will clear all objects including hidden objects
+gc() # free up memory and report the memory usage
+options(max.print = .Machine$integer.max, scipen = 999, stringsAsFactors = F, dplyr.summarise.inform = F) # avoid truncated output in R console and scientific notation
+
+
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(Matrix)
+
+
+path <-"C:/Users/sreev/Desktop/Cours/ING5 Verona/PROJET SingleCell R/TAF/NSCLC_donor_7_count_sample_feature_bc_matrix/sample_feature_bc_matrix"
+sparse_matrix <- Seurat::Read10X(data.dir = path)
+
+```
+
+```{r separate}
+
+seu <- Seurat::CreateSeuratObject(counts = sparse_matrix$`Gene Expression`,
+                                  project = "NSCLC",
+                                  min.cells = 3,
+                                  min.features = 100)
+```
+
+```{r , echo=FALSE}
+Seurat::FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") + geom_smooth(method = "lm")
+Seurat::VlnPlot(seu, features = c("nCount_RNA",
+                                  "nFeature_RNA")) 
+```
+
+```{r, echo=FALSE}
+
+# Calculer les quartiles, min, max, VAMA et VAMI pour chaque groupe
+stats <- VlnPlot(seu, features = c("nFeature_RNA"), pt.size = 0)$data %>%
+  group_by(ident) %>%
+  summarise(Min = min(nFeature_RNA),
+            Q1 = quantile(nFeature_RNA, 0.25),
+            Q2 = quantile(nFeature_RNA, 0.50),
+            Q3 = quantile(nFeature_RNA, 0.75),
+            Max = max(nFeature_RNA),
+            VAMI = Q1 - 1.5 * (Q3 - Q1),  # Valeur adjacente minimale
+            VAMA = Q3 + 1.5 * (Q3 - Q1))  # Valeur adjacente maximale
+
+# Ajouter des lignes pour les quartiles, min, max, VAMI et VAMA sur le plot
+VlnPlot(seu, features = c("nFeature_RNA"), pt.size = 0) + 
+  geom_hline(data = stats, aes(yintercept = Min), linetype="dashed", color="purple") + 
+  geom_hline(data = stats, aes(yintercept = Q1), linetype="dashed", color="blue") + 
+  geom_hline(data = stats, aes(yintercept = Q2), linetype="dashed", color="green") + 
+  geom_hline(data = stats, aes(yintercept = Q3), linetype="dashed", color="red") + 
+  geom_hline(data = stats, aes(yintercept = Max), linetype="dashed", color="orange") + 
+  geom_hline(data = stats, aes(yintercept = VAMI), linetype="dotted", color="darkblue") + 
+  geom_hline(data = stats, aes(yintercept = VAMA), linetype="dotted", color="darkred") + 
+  geom_text(data = stats, aes(y = Min, label = round(Min, 2)), vjust = -0.5, color="purple") +
+  geom_text(data = stats, aes(y = Q1, label = round(Q1, 2)), vjust = -0.5, color="blue") +
+  geom_text(data = stats, aes(y = Q2, label = round(Q2, 2)), vjust = -0.5, color="green") +
+  geom_text(data = stats, aes(y = Q3, label = round(Q3, 2)), vjust = -0.5, color="red") +
+  geom_text(data = stats, aes(y = Max, label = round(Max, 2)), vjust = -0.5, color="orange") +
+  geom_text(data = stats, aes(y = VAMI, label = round(VAMI, 2)), vjust = -0.5, color="darkblue") +
+  geom_text(data = stats, aes(y = VAMA, label = round(VAMA, 2)), vjust = -0.5, color="darkred")
+
+```
+
+```{r, echo=FALSE}
+# mitochondrial genes
+seu <- Seurat::PercentageFeatureSet(seu, 
+                                    pattern = "^MT-", 
+                                    col.name = "percent.mito")
+# ribosomal genes
+seu <- Seurat::PercentageFeatureSet(seu, 
+                                    pattern = "^RP[SL]",
+                                    col.name = "percent.ribo")
+# hemoglobin genes (but not HBP)
+seu <- Seurat::PercentageFeatureSet(seu,
+                                    pattern = "^HB[^(P)]",
+                                    col.name = "percent.globin")
+Seurat::VlnPlot(seu, features = c("percent.mito",
+                                  "percent.ribo",
+                                  "percent.globin"))
+```
+
+```{r, echo=FALSE}
+
+# Calculer les quartiles, min, max, VAMA et VAMI pour chaque groupe
+stats <- VlnPlot(seu, features = c("percent.mito"), pt.size = 0)$data %>%
+  group_by(ident) %>%
+  summarise(Min = min(percent.mito),
+            Q1 = quantile(percent.mito, 0.25),
+            Q2 = quantile(percent.mito, 0.50),
+            Q3 = quantile(percent.mito, 0.75),
+            Max = max(percent.mito),
+            VAMI = Q1 - 1.5 * (Q3 - Q1),  # Valeur adjacente minimale
+            VAMA = Q3 + 1.5 * (Q3 - Q1))  # Valeur adjacente maximale
+
+# Ajouter des lignes pour les quartiles, min, max, VAMI et VAMA sur le plot
+VlnPlot(seu, features = c("percent.mito"), pt.size = 0) + 
+  geom_hline(data = stats, aes(yintercept = Min), linetype="dashed", color="purple") + 
+  geom_hline(data = stats, aes(yintercept = Q1), linetype="dashed", color="blue") + 
+  geom_hline(data = stats, aes(yintercept = Q2), linetype="dashed", color="green") + 
+  geom_hline(data = stats, aes(yintercept = Q3), linetype="dashed", color="red") + 
+  geom_hline(data = stats, aes(yintercept = Max), linetype="dashed", color="orange") + 
+  geom_hline(data = stats, aes(yintercept = VAMI), linetype="dotted", color="darkblue") + 
+  geom_hline(data = stats, aes(yintercept = VAMA), linetype="dotted", color="darkred") + 
+  geom_text(data = stats, aes(y = Min, label = round(Min, 2)), vjust = -0.5, color="purple") +
+  geom_text(data = stats, aes(y = Q1, label = round(Q1, 2)), vjust = -0.5, color="blue") +
+  geom_text(data = stats, aes(y = Q2, label = round(Q2, 2)), vjust = -0.5, color="green") +
+  geom_text(data = stats, aes(y = Q3, label = round(Q3, 2)), vjust = -0.5, color="red") +
+  geom_text(data = stats, aes(y = Max, label = round(Max, 2)), vjust = -0.5, color="orange") +
+  geom_text(data = stats, aes(y = VAMI, label = round(VAMI, 2)), vjust = -0.5, color="darkblue") +
+  geom_text(data = stats, aes(y = VAMA, label = round(VAMA, 2)), vjust = -0.5, color="darkred")
+
+```
+
+```{r, echo=FALSE}
+
+# Calculer les quartiles, min, max, VAMA et VAMI pour chaque groupe
+stats <- VlnPlot(seu, features = c("percent.ribo"), pt.size = 0)$data %>%
+  group_by(ident) %>%
+  summarise(Min = min(percent.ribo),
+            Q1 = quantile(percent.ribo, 0.25),
+            Q2 = quantile(percent.ribo, 0.50),
+            Q3 = quantile(percent.ribo, 0.75),
+            Max = max(percent.ribo),
+            VAMI = Q1 - 1.5 * (Q3 - Q1),  # Valeur adjacente minimale
+            VAMA = Q3 + 1.5 * (Q3 - Q1))  # Valeur adjacente maximale
+
+# Ajouter des lignes pour les quartiles, min, max, VAMI et VAMA sur le plot
+VlnPlot(seu, features = c("percent.ribo"), pt.size = 0) + 
+  geom_hline(data = stats, aes(yintercept = Min), linetype="dashed", color="purple") + 
+  geom_hline(data = stats, aes(yintercept = Q1), linetype="dashed", color="blue") + 
+  geom_hline(data = stats, aes(yintercept = Q2), linetype="dashed", color="green") + 
+  geom_hline(data = stats, aes(yintercept = Q3), linetype="dashed", color="red") + 
+  geom_hline(data = stats, aes(yintercept = Max), linetype="dashed", color="orange") + 
+  geom_hline(data = stats, aes(yintercept = VAMI), linetype="dotted", color="darkblue") + 
+  geom_hline(data = stats, aes(yintercept = VAMA), linetype="dotted", color="darkred") + 
+  geom_text(data = stats, aes(y = Min, label = round(Min, 2)), vjust = -0.5, color="purple") +
+  geom_text(data = stats, aes(y = Q1, label = round(Q1, 2)), vjust = -0.5, color="blue") +
+  geom_text(data = stats, aes(y = Q2, label = round(Q2, 2)), vjust = -0.5, color="green") +
+  geom_text(data = stats, aes(y = Q3, label = round(Q3, 2)), vjust = -0.5, color="red") +
+  geom_text(data = stats, aes(y = Max, label = round(Max, 2)), vjust = -0.5, color="orange") +
+  geom_text(data = stats, aes(y = VAMI, label = round(VAMI, 2)), vjust = -0.5, color="darkblue") +
+  geom_text(data = stats, aes(y = VAMA, label = round(VAMA, 2)), vjust = -0.5, color="darkred")
+
+```
+
+```{r clean seu, echo=FALSE}
+seuClean <- subset(seu, subset = nFeature_RNA > 172 & nFeature_RNA < 5470 & percent.mito < 14 & percent.ribo > 5)
+
+Seurat::VlnPlot(seuClean, features = c("nFeature_RNA","percent.mito", "percent.ribo"))
+```
+
+```{r, echo=FALSE}
+
+most_expressed_boxplot <- function(object, ngenes = 20){
+  
+  # matrix of raw counts
+  cts <- Seurat::GetAssayData(object, assay = "RNA", slot = "counts")
+  
+  # get percentage/cell
+  cts <- t(cts)/colSums(cts)*100
+  medians <- apply(cts, 2, median)
+  
+  # get top n genes
+  most_expressed <- order(medians, decreasing = T)[ngenes:1]
+  most_exp_matrix <- as.matrix((cts[,most_expressed]))
+  
+  # prepare for plotting
+  most_exp_df <- stack(as.data.frame(most_exp_matrix))
+  colnames(most_exp_df) <- c("perc_total", "gene")
+  
+  # boxplot with ggplot2
+  boxplot <- ggplot(most_exp_df, aes(x=gene, y=perc_total)) +
+    geom_boxplot() +
+    coord_flip()
+  return(boxplot)
+}
+most_expressed_boxplot(seu, 20)
+most_expressed_boxplot(seuClean, 20)
+```
+
+## Normalization
+
+```{r, echo=FALSE}
+seuClean <- Seurat::NormalizeData(seuClean,
+                     normalization.method = "LogNormalize",
+                     scale.factor = 10000)
+```
+
+```{r, echo=FALSE}
+seuClean <- Seurat::FindVariableFeatures(seuClean,
+                            selection.method = "vst",
+                            nfeatures = 2000) #CHANGE STV
+```
+
+```{r, echo=FALSE}
+vf_plot <- Seurat::VariableFeaturePlot(seuClean)
+top10 <- head(Seurat::VariableFeatures(seuClean), 10)
+top10
+Seurat::LabelPoints(plot = vf_plot,
+            points = top10, repel = TRUE)
+```
+
+```{r, echo=FALSE}
+seuClean <- Seurat::ScaleData(seuClean,
+                 features = rownames(seuClean))
+```
+
+## Dimesionality Reduction
+
+```{r, echo=FALSE}
+seuClean <- Seurat::RunPCA(seuClean)
+Seurat::DimPlot(seuClean, reduction = "pca") #  allows you to color the points in the plot according to a grouping variable (e.g. sample)
+Seurat::FeaturePlot(seuClean, reduction = "pca", features = "nFeature_RNA") #allows you to color the points according to a continuous variable (e.g. gene expression)
+```
+
+```{r, echo=FALSE}
+Seurat::FeaturePlot(seuClean, reduction = "pca", features = "MS4A1") #B cells markers
+Seurat::FeaturePlot(seuClean, reduction = "pca", features = "COL3A1") #high variable markers
+```
+
+```{r, echo=FALSE}
+Seurat::DimHeatmap(seuClean, dims = 1:12, cells = 500, balanced = TRUE)
+Seurat::DimHeatmap(seuClean, dims = 13:20, cells = 500, balanced = TRUE)
+```
+
+```{r, echo=FALSE}
+# Charger les bibliothèques nécessaires
+library(Seurat)
+library(ggplot2)
+
+# Extraire la matrice de chargements pour chaque gène et chaque composant principal
+pca_loadings <- seuClean[["pca"]]@feature.loadings
+
+# Créer un graphique pour montrer l'impact des 10 gènes ayant les plus fortes contributions pour chaque composant
+for (i in 1:20) {
+  # Prendre les 10 valeurs les plus fortes en valeur absolue, qu'elles soient positives ou négatives
+  top_genes_indices <- order(abs(pca_loadings[, i]), decreasing = TRUE)[1:10]
+  top_genes_values <- pca_loadings[top_genes_indices, i]
+  
+  # Créer un barplot avec des couleurs en fonction des valeurs positives ou négatives
+  barplot(top_genes_values,
+          main = paste("Impact linéaire - PC", i),
+          las = 2, col = ifelse(top_genes_values > 0, "blue", "red"),
+          ylab = "Contribution",
+          names.arg = rownames(pca_loadings)[top_genes_indices])
+}
+
+
+```
+
+```{r, echo=FALSE}
+for (i in 1:20) {
+  print(VizDimLoadings(seuClean, dims = i, reduction = "pca"))
+}
+
+```
+
+```{r, echo=FALSE}
+ # vers PC_22 ça donne 2.5 de std
+
+# Ajouter une ligne rouge à 2.5% d'écart type sur le plot
+Seurat::ElbowPlot(seuClean, ndims = 40) + 
+  geom_hline(yintercept = 5, color = "red", linetype = "dashed") +
+  geom_text(aes(x = 13, y = 5, label = round(2.5, 2)), label="5% cut-in threshold", color = "red", vjust = -1, ) +
+geom_hline(yintercept = 2.5, color = "green", linetype = "dashed") +
+  geom_text(aes(x = 23, y = 3, label = round(2.5, 2)), label="2.5% cut-in threshold", color = "green", vjust = -1, )
+```
+
+```{r , echo=FALSE}
+seuClean <- Seurat::RunUMAP(seuClean, dims = 1:6)
+Seurat::DimPlot(seuClean, reduction = "umap")
+Seurat::FeaturePlot(seuClean, features = c("MS4A1", "CD3D", "percent.mito")) #MS4A1 B cell CD3D tcell
+Seurat::FeaturePlot(seuClean, features = c("MS4A1"))
+Seurat::FeaturePlot(seuClean, features = c("CD3D")) #I SEE DUPLET BC BLEEDING
+Seurat::FeaturePlot(seuClean, features = c("percent.mito"))
+
+```
+
+```{r , echo=FALSE}
+seuClean <- Seurat::RunUMAP(seuClean, dims = 1:20, n_neighbors = 30L)
+Seurat::DimPlot(seuClean, reduction = "umap")
+Seurat::FeaturePlot(seuClean, features = c("MS4A1", "CD3D", "percent.mito")) #MS4A1 B cell CD3D tcell
+Seurat::FeaturePlot(seuClean, features = c("MS4A1"))
+Seurat::FeaturePlot(seuClean, features = c("CD3D")) #I SEE DUPLET BC BLEEDING
+Seurat::FeaturePlot(seuClean, features = c("percent.mito"))
+
+```
+
+## Clustering CellAnnotation
+
+```{r, echo=FALSE}
+seuClean <- Seurat::FindNeighbors(seuClean, dims = 1:20)
+
+seuClean <- Seurat::FindClusters(seuClean, resolution = seq(0.1, 1, by=0.1))
+
+head(seuClean@meta.data)
+
+library(clustree)
+clustree::clustree(seuClean@meta.data[,grep("RNA_snn_res", colnames(seuClean@meta.data))],
+                   prefix = "RNA_snn_res.")
+
+```
+
+```{r, echo=FALSE}
+# Boucle de 0.1 à 1 par incréments de 0.1
+for (res in seq(0.1, 1, by = 0.1)) {
+  # Créer la chaîne de caractères correspondant au group.by
+  res_string <- paste0("RNA_snn_res.", res)
+  
+  # Afficher le plot
+  print(DimPlot(seuClean, group.by = res_string, label = TRUE) + 
+       ggtitle(paste("Résolution:", res)))
+} #3 parait stable dans les trees sur le umap
+```
+
+## Doublet Finder
+
+
+```{r, echo=FALSE}
+get.data <- function(Sobj, genes) {
+  
+  # Extract Meta data
+  df.meta <- data.frame(Cluster = Sobj@active.ident, Sobj@meta.data)
+  
+  # Extract tSNE coordinates if available
+  if(!is.null(Sobj@reductions$tsne))
+  { 
+    df.meta <- cbind(df.meta, Sobj@reductions$tsne@cell.embeddings) 
+  }
+  
+  # Extract UMAP coordinates if available
+  if(!is.null(Sobj@reductions$umap))
+  { 
+    df.meta <- cbind(df.meta, Sobj@reductions$umap@cell.embeddings) 
+  }
+  # Extract gene expression data for expressed genes
+  count.data <- as.matrix(GetAssayData(object = Sobj, slot = "scale.data"))
+  genes.red <- rownames(count.data)[rownames(count.data) %in% genes]
+  dftotal <-  cbind(df.meta, FetchData(Sobj, genes.red))
+  
+  return(dftotal)
+}
+```
+
+```{r, echo=FALSE}
+CommonMarkers <- c("CD79A", "CD79B", "MS4A1", "CD3E", "CD3D")
+DF <- get.data(seuClean, genes=CommonMarkers)
+```
+
+```{r, echo=FALSE}
+
+DF$Supervised_Singlets <- "Keep" 
+DF$Supervised_Singlets[(DF$CD3E>0 | DF$CD3D>0) & (DF$MS4A1>0 | DF$CD79A>0 | DF$CD79B>0)] <- "Remove"
+seuClean$Supervised_Singlets <- DF$Supervised_Singlets
+
+# Number of supervised B/T doublets:
+table(seuClean$Supervised_Singlets)
+
+# Visualize the doublets on the 2D graph
+Seurat::DimPlot(seuClean, reduction = "umap", group.by = "Supervised_Singlets")
+```
+
+```{r, echo= FALSE}
+calculate_doubletScore <- function(seuObj) {
+  library(DoubletFinder)
+  #seu <- RunUMAP(seu, dims = 1:20)
+  
+  ## pK Identification (no ground-truth) ---------------------------------------------------------------------------------------
+  sweep.res.list <- paramSweep(seuObj, PCs = 1:20, sct = FALSE)
+  sweep.stats <- summarizeSweep(sweep.res.list, GT = FALSE)
+  bcmvn <- find.pK(sweep.stats)
+  
+  
+  nExp_poi <- round(0.04*nrow(seuObj@meta.data))  ## Assuming 0.04% doublet formation rate
+  
+  ## Run DoubletFinder with varying classification stringencies ----------------------------------------------------------------
+  seuObj <- doubletFinder(seuObj, PCs = 1:20, pN = 0.25, pK = 0.09, nExp = nExp_poi, reuse.pANN = FALSE, sct = FALSE)
+  return(seuObj)
+}
+
+seuClean <- calculate_doubletScore(seuClean)
+```
+
+```{r , echo=FALSE}
+#Save the results into the Seurat Object
+seuClean$Doublets <- seuClean$DF.classifications_0.25_0.09_84 # VERIF DANS LA VARIABLE
+seuCleanDoublet <- subset(x = seuClean, subset= Supervised_Singlets=="Keep" & Doublets=="Singlet")
+```
+
+```{r, echo=FALSE}
+# Visualize the doublets on the 2D graph
+table(seuClean$Doublets)
+Seurat::DimPlot(seuClean, reduction = "umap", group.by = "Doublets", cols = c("blue", "orange"))
+```
+
+
+```{r, echo=FALSE}
+seuCleanDoublet <- Seurat::NormalizeData(seuCleanDoublet,
+                             normalization.method = "LogNormalize",
+                             scale.factor = 10000)
+seuCleanDoublet <- Seurat::FindVariableFeatures(seuCleanDoublet,selection.method = "vst", nfeatures = 2000)
+seuCleanDoublet <- Seurat::ScaleData(seuCleanDoublet, features = rownames(seu))
+
+seuCleanDoublet <- Seurat::RunPCA(seuCleanDoublet)
+Seurat::ElbowPlot(seuClean, ndims = 40) + 
+  geom_hline(yintercept = 5, color = "red", linetype = "dashed") +
+  geom_text(aes(x = 13, y = 5, label = round(2.5, 2)), label="5% cut-in threshold", color = "red", vjust = -1, ) +
+geom_hline(yintercept = 2.5, color = "green", linetype = "dashed") +
+  geom_text(aes(x = 23, y = 3, label = round(2.5, 2)), label="2.5% cut-in threshold", color = "green", vjust = -1, )
+
+dum <- seuCleanDoublet
+# Liste des valeurs pour min.dist
+min_dist_values <- c(0.1, 0.2, 0.3, 0.4, 0.5)
+# Sauvegarder l'identité originale pour pouvoir la restaurer ensuite
+original_idents <- Idents(dum)
+# Appliquer une identité unique à tous les points pour un affichage uniforme
+Idents(dum) <- "All"
+# Boucle pour chaque valeur de min.dist
+for (dist in min_dist_values) {
+  # Appliquer RunUMAP avec la valeur actuelle de min.dist
+  dum <- Seurat::RunUMAP(dum, dims = 1:20, min.dist = dist)
+  
+  # Afficher le DimPlot avec la réduction UMAP
+  print(Seurat::DimPlot(dum, reduction = "umap", cols = "orange") + ggtitle(paste("min.dist =", dist)))
+}
+
+
+seuCleanDoublet <- Seurat::RunUMAP(seuCleanDoublet, dims = 1:20)
+
+seuCleanDoublet <- Seurat::FindNeighbors(seuCleanDoublet, dims = 1:20)
+seuCleanDoublet <- Seurat::FindClusters(seuCleanDoublet, resolution = seq(0.1, 1, by=0.1))
+
+for (res in seq(0.1, 1, by = 0.1)) {
+  # Créer la chaîne de caractères correspondant au group.by
+  res_string <- paste0("RNA_snn_res.", res)
+  
+  # Afficher le plot
+  print(DimPlot(seuCleanDoublet, group.by = res_string, label = TRUE) + 
+       ggtitle(paste("Résolution:", res)))
+}
+
+clustree::clustree(seuCleanDoublet@meta.data[,grep("RNA_snn_res", colnames(seuCleanDoublet@meta.data))],
+                   prefix = "RNA_snn_res.")
+```
+
+
+
+## Cell Annotation
+
+```{r, echo=FALSE}
+library(Seurat)
+library(celldex)
+library(SingleR)
+```
+
+```{r, echo=FALSE}
+seuCleanDoublet <- Seurat::SetIdent(seuCleanDoublet, value = seuCleanDoublet$RNA_snn_res.0.4)
+```
+
+```{r, echo=FALSE}
+DefaultAssay(seuCleanDoublet) <- "RNA"
+Seurat::FeaturePlot(seuCleanDoublet, c("MS4A1", "CD3D"))
+
+```
+```{r, echo=FALSE}
+markers_cluster0 <- FindMarkers(seuCleanDoublet, ident.1 = 9)
+# Filtrer pour ne garder que les gènes avec un p-valeur ajusté < 0.05
+significant_genes <- markers_cluster0[markers_cluster0$p_val_adj < 0.001, ]
+gene_names <- rownames(significant_genes)
+print(gene_names)
+
+```
+
+```{r, echo=FALSE}
+string <- "WWTR1"
+if (string %in% gene_names) {
+  print("true")
+} else {
+  print("false")
+}
+```
+
+```{r, echo=FALSE}
+tumorSuppresor <- c("DLC1","LOX","PTPRG")
+
+Seurat::FeaturePlot(seuCleanDoublet, tumorSuppresor, ncol=2)
+Seurat::VlnPlot(seuCleanDoublet,
+                features = tumorSuppresor,
+                ncol = 2)
+```
+
+```{r, echo=FALSE}
+
+protoOncogene <- c("JUNB", "FOS", "COL5A2", "TGFBR3")
+
+Seurat::FeaturePlot(seuCleanDoublet, protoOncogene, ncol=2)
+Seurat::VlnPlot(seuCleanDoublet,
+                features = protoOncogene,
+                ncol = 2)
+```
+
+
+```{r, echo=FALSE}
+tcell_genes <- c("IL7R", "TRAC", "CD3D", "CD3E")
+bcell_genes <- c("MS4A1", "CD79A", "CD79B","CD19")
+
+Seurat::FeaturePlot(seuCleanDoublet, tcell_genes, ncol=2)
+Seurat::VlnPlot(seuCleanDoublet,
+                features = tcell_genes,
+                ncol = 2)
+
+```
+
+```{r, echo=FALSE}
+Seurat::FeaturePlot(seuCleanDoublet, bcell_genes, ncol=2)
+Seurat::VlnPlot(seuCleanDoublet,
+                features = bcell_genes,
+                ncol = 2)
+```
+
+
+```{r, echo=FALSE}
+seuCleanDoublet <- Seurat::AddModuleScore(seuCleanDoublet,
+                              features = list(bcell_genes),
+                              name = "bcell_genes")
+seuCleanDoublet <- Seurat::AddModuleScore(seuCleanDoublet,
+                              features = list(tcell_genes),
+                              name = "tcell_genes")
+
+seuCleanDoublet <- Seurat::AddModuleScore(seuCleanDoublet,
+                              features = list(protoOncogene),
+                              name = "protoOncogene")
+seuCleanDoublet <- Seurat::AddModuleScore(seuCleanDoublet,
+                              features = list(tumorSuppresor),
+                              name = "tumorSuppresor")
+```
+
+```{r, echo=FALSE}
+Seurat::FeaturePlot(seuCleanDoublet, "bcell_genes1")
+Seurat::FeaturePlot(seuCleanDoublet, "tcell_genes1")
+Seurat::FeaturePlot(seuCleanDoublet, "protoOncogene1")
+Seurat::FeaturePlot(seuCleanDoublet, "tumorSuppresor1")
+```
+
+### Cycling phase
+
+```{r, echo=FALSE}
+s.genes <- Seurat::cc.genes.updated.2019$s.genes
+g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
+```
+
+```{r, echo=FALSE}
+seuCleanDoublet <- Seurat::CellCycleScoring(seuCleanDoublet, s.features = s.genes, g2m.features = g2m.genes)
+```
+
+```{r, echo=FALSE}
+Seurat::DimPlot(seuCleanDoublet, group.by = "Phase")
+```
+
+### SingleR
+
+#### BlueprintEncodeData
+
+```{r, echo=FALSE}
+ref <- celldex::BlueprintEncodeData()
+
+# Let's take a look at the cell types present in the refrence
+table(ref$label.main)
+
+# Let's select from the reference the populations of cells likely to be present in our dataset 
+ref_reduce <- ref #[,ref$label.main %in% c("B-cells","CD4+ T-cells","CD8+ T-cells","Monocytes","NK cells","Epithelial cells","HSC","Eosinophils","DC")] #CHANGE
+```
+
+```{r, echo=FALSE}
+library(pheatmap)
+seu_SingleR <- SingleR(test=GetAssayData(seuCleanDoublet, assay = "RNA", slot = "data"),
+                           ref=ref_reduce, labels=ref_reduce$label.fine)
+head(seu_SingleR)
+SingleR::plotScoreHeatmap(seu_SingleR)
+```
+
+```{r, echo=FALSE}
+seuCleanDoublet$SingleR_annot <- seu_SingleR$labels
+dittoSeq::dittoDimPlot(seuCleanDoublet, "SingleR_annot", size = 0.7)
+dittoSeq::dittoBarPlot(seuCleanDoublet, var = "SingleR_annot", group.by = "RNA_snn_res.0.4")
+```
+
+### CHETAH
+
+```{r, echo=FALSE}
+library(CHETAH)
+
+load("CHETAH_TME_reference.Rdata") 
+
+parotid10x.sce <- CHETAH::CHETAHclassifier(input=as.SingleCellExperiment(seuCleanDoublet), ref_cells = reference, thresh = 0.05)
+
+PlotCHETAH(parotid10x.sce, redD="UMAP")
+
+PlotCHETAH(parotid10x.sce, redD="UMAP", tree = FALSE)
+
+# Let's visualize the cell annotation
+print(table(parotid10x.sce$celltype_CHETAH))
+
+seuCleanDoublet$CHETAH_annot <- as.character(parotid10x.sce$celltype_CHETAH)
+```
+
+## Cell_CrossTalks
+
+### SingleR
+
+```{r, echo=FALSE}
+library(CellChat)  #BiocManager::install("ComplexHeatmap")
+#devtools::install_github("sqjin/CellChat")
+library(SingleR)
+```
+
+```{r, echo=FALSE}
+# Select only T, B and plasmacells and fibroplaste car cancer
+
+sce.Parotid10x <- subset(seuCleanDoublet, subset= SingleR_annot=="Monocytes" | SingleR_annot=="CD4+ Tcm" | SingleR_annot=="Macrophages" | SingleR_annot=="CD8+ Tcm" | SingleR_annot=="Epithelial cells" | SingleR_annot=="Tregs" | SingleR_annot=="Plasma cells" | SingleR_annot=="Fibroblasts" | SingleR_annot=="Class-switched memory B-cells" | SingleR_annot=="CD4+ Tem" | SingleR_annot=="NK cells" | SingleR_annot=="DC" | SingleR_annot=="CD8+ Tem" | SingleR_annot=="Adipocytes" | SingleR_annot=="CLP" )
+  #subset(seuCleanDoublet, subset= SingleR_annot!="CD4+ T-cells" SingleR_annot!="CD8+ T-cells" |SingleR_annot!="Endothelial cells"| SingleR_annot!="MEP" | SingleR_annot!="MPP" | SingleR_annot!="mv Endothelial cells" | SingleR_annot!="Memory B-cells" | SingleR_annot!="naive B-cells" | SingleR_annot!="CMP" | SingleR_annot!="Myocytes" | SingleR_annot!="Macrophages M1" | SingleR_annot!="HSC" | SingleR_annot!="Keratinocytes" | SingleR_annot!="Mesangial cells") #seuCleanDoublet #subset(seuCleanDoublet, subset= SingleR_annot=="CD4+ T-cells" | SingleR_annot=="CD4+ Tcm" | SingleR_annot=="CD8+ T-cells" | SingleR_annot=="CD8+ Tcm" | SingleR_annot=="Memory B-cells" | SingleR_annot=="naive B-cells" | SingleR_annot=="Plasma cells" | SingleR_annot=="Fibroblasts")
+
+
+
+
+```
+
+```{r, echo=FALSE}
+CellChatDB <- CellChatDB.human  # Note: use CellChatDB.mouse if running on mouse data
+#showDatabaseCategory(CellChatDB)
+```
+
+```{r, echo=FALSE}
+# Create the CellChat object and specify the name of the column in the meta.data slot containing the cell group or annotation
+cellchatParotid10x <- createCellChat(object = sce.Parotid10x, group.by = "SingleR_annot")
+
+# set the used database in the object
+cellchatParotid10x@DB <- CellChatDB
+
+cellchatParotid10x <- subsetData(cellchatParotid10x) # subset the expression data of signaling genes for saving computation cost
+
+# Identify over-expressed ligands or receptors
+cellchatParotid10x <- identifyOverExpressedGenes(cellchatParotid10x, group.by = "SingleR_annot")
+
+# Identify over-expressed ligand-receptor interactions if either ligand or receptor is over-expressed.
+
+cellchatParotid10x <- identifyOverExpressedInteractions(cellchatParotid10x)
+cellchatParotid10x <- projectData(cellchatParotid10x, PPI.human)
+cellchatParotid10x <- computeCommunProb(cellchatParotid10x, raw.use = TRUE)
+
+# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
+cellchatParotid10x <- filterCommunication(cellchatParotid10x, min.cells = 10)
+
+# Compute the communication probability and infer cellular communication network
+cellchatParotid10x <- computeCommunProbPathway(cellchatParotid10x)
+
+# Calculate the aggregated cell-cell communication network
+cellchatParotid10x <- aggregateNet(cellchatParotid10x)
+
+groupSize <- as.numeric(table(cellchatParotid10x@idents))
+par(mfrow = c(1,1), xpd=TRUE)
+
+# Let's visualize the interactions (crosstalks) within our cells
+netVisual_circle(cellchatParotid10x@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Parotid 10x\nNumber of interactions")
+```
+
+Due to the complicated cell-cell communication network, we can examine the signaling sent from CD4 T-cells and the other cell groups
+
+```{r, echo=FALSE}
+mat <- cellchatParotid10x@net$weight
+par(mfrow = c(1, 1), xpd = TRUE)
+
+# Taille de `mat` pour obtenir le nombre de lignes
+n <- nrow(mat)
+
+for (i in 1:n) {
+  # Créer une matrice temporaire pour chaque ligne i
+  temp_mat <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
+  
+  # Copier les valeurs de la ligne i de `mat` dans `temp_mat`
+  temp_mat[i, ] <- mat[i, ]
+  
+  # Définir un titre dynamique pour le graphique en fonction de l'indice de ligne
+  titre <- paste("Graphique pour ligne", rownames(mat)[i], i)
+  
+  # Visualiser le graphique
+  netVisual_circle(temp_mat, vertex.weight = groupSize, 
+                   weight.scale = TRUE, edge.weight.max = max(mat), title.name = titre)
+}
+
+```
+
+Then take a look at the significant Ligand/Receptor pairs:
+
+```{r, echo=FALSE}
+n <- nrow(mat)
+
+for (i in 1:n) {
+  j <- i + 1
+  titre <- paste("10x MALT \n  Graphique pour ligne", rownames(mat)[i], i)
+  tryCatch({
+    interaction <- netVisual_bubble(
+      cellchatParotid10x, 
+      sources.use = c(i:j),
+      #targets.use = c(1:n),  # Inclure tous les groupes comme cibles, si nécessaire
+      remove.isolate = TRUE,
+      title.name = titre,
+      #return.data = T
+    )
+    print(interaction)
+  }, error = function(e) {
+    # Affiche un message d'avertissement et passe à l'itération suivante
+    print(paste("Aucune interaction détectée pour le groupe", rownames(mat)[i], i))
+  })
+}
+```
+
+We can plot the gene expression distribution of signaling genes related to L-R pairs or signaling pathway using a Seurat wrapper function `plotGeneExpression`.
+
+```{r, echo=FALSE}
+plotGeneExpression(cellchatParotid10x, signaling = "COLLAGEN") #regarde dans pathways pour mettre le bon signaling DEMANDE A CHATON ON VEUT ETUDIE QUOI
+
+plotGeneExpression(cellchatParotid10x, signaling = "TGFb")
+```
+
+```{r, echo=FALSE}
+for (i in 1:n) {
+    titre <- paste("10x MALT \n Graphique pour ligne", rownames(mat)[10], 10," <- ", rownames(mat)[i])
+    tryCatch({
+      # Utiliser uniquement la cellule 10 en tant que source
+      interaction <- netVisual_bubble(
+        cellchatParotid10x, 
+        sources.use = 10,  # Cellule 14 comme source unique
+        targets.use = i,   # Cible est chaque cellule "i" dans la boucle
+        remove.isolate = TRUE,
+        title.name = titre,
+        font.size = 5
+      )
+      print(interaction)
+    }, error = function(e) {
+      # Affiche un message d'avertissement si aucune interaction n'est détectée
+      print(paste("Aucune interaction détectée pour le groupe", rownames(mat)[i]))
+    })
+}
+```
+
+## Cell Trajectory
+
+```{r, echo=FALSE}
+# This seurat object has two vectors in the meta.data cointining important information 
+table(seuCleanDoublet$seurat_clusters)
+
+table(seuCleanDoublet$Supervised_Singlets)
+```
+
+```{r, echo=FALSE}
+library("RColorBrewer")
+library("scater") #BiocManager::install("scater")
+library("TSCAN")  #BiocManager::install("TSCAN")
+library("destiny") #BiocManager::install("destiny")
+library("slingshot") #BiocManager::install("slingshot")
+library("Seurat")
+```
+
+For this example here we are excluding from the analysis T-cells, Monocytes and cells present at low percentage.
+
+```{r, echo=FALSE}
+# Subset the seurat object and select only B-cells
+
+seuCleanDoublet_Traj <- subset(x = seuCleanDoublet, subset= SingleR_annot=="Fibroblasts" | SingleR_annot=="Monocytes" | SingleR_annot=="Macrophages" | SingleR_annot=="DC" | SingleR_annot=="HSC") 
+```
+
+We could now extract the counts and meta.data to create the SingleCellExperiment object
+
+```{r, echo=FALSE}
+counts <- seuCleanDoublet_Traj@assays$RNA@counts 
+metadata <- seuCleanDoublet_Traj@meta.data
+
+# Set up metadata as desired for aggregation and DE analysis
+Idents(seuCleanDoublet_Traj) <- seuCleanDoublet_Traj$SingleR_annot
+metadata$cluster_id <- factor(seuCleanDoublet_Traj@active.ident)
+
+# Create single cell experiment object
+sce <- SingleCellExperiment(assays = list(counts = counts), 
+                            colData = metadata)
+reducedDims(sce) <- list(PCA=seuCleanDoublet_Traj[["pca"]]@cell.embeddings[, 1:20],
+                         UMAP=seuCleanDoublet_Traj[["umap"]]@cell.embeddings)
+```
+
+So, everything is ready for the trajectory inference using slingshot R package
+
+```{r, echo=FALSE}
+  gastric_SCE <- slingshot(sce, clusterLabels = 'SingleR_annot', reducedDim = 'PCA')
+  
+
+  rd <- reducedDims(gastric_SCE)$UMAP
+
+  lin1 <- getLineages(rd, seuCleanDoublet_Traj$SingleR_annot)
+  
+  # Command for visualization purpose
+  
+  seuCleanDoublet_Traj$SingleR_annot <- as.factor(seuCleanDoublet_Traj$SingleR_annot)
+  plot(rd, col = brewer.pal(3,"Set1")[seuCleanDoublet_Traj$SingleR_annot], asp = 1, pch = 16)
+  lines(SlingshotDataSet(lin1), lwd = 3, col = 'black')
+  Seurat::DimPlot(seuCleanDoublet_Traj, reduction = "umap") #, group.by = "Supervised_Singlets"
+```
