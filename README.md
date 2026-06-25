@@ -196,11 +196,13 @@ Investigation of differentiation processes
 ```
 project/
 │
-├── data/
-├── scripts/
-├── results/
-├── figures/
-├── reports/
+├── NSCLC_donor_7_count_sample_feature_bc_matrix/sample_feature_bc_matrix/
+                                                ├── barcodes.tsv.gz
+                                                ├── features.tsv.gz
+                                                └── matrix.mtx.gz
+├── CHETAH_TME_reference.Rdata (missing)
+├── projetCode.html
+├── projetCode.Rmd
 └── README.md
 ```
 ---
