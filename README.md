@@ -2,7 +2,7 @@
 ```
 Archivage d'un projet que j'ai fait en italie
 
-==manque le fichier CHETAH_TME_reference.Rdata pour chetah.==
+manque le fichier CHETAH_TME_reference.Rdata pour chetah.
 ```
 A comprehensive single-cell multi-omics analysis workflow for preprocessing, quality control, cell annotation, cell-cell communication analysis, and trajectory inference.
 
@@ -111,6 +111,7 @@ Reference atlas used for automated cell identification.
 CHETAH
 
 Hierarchical cell type identification for improved annotation accuracy.
+need to download it from : https://figshare.com/s/aaf026376912366f81b6
 
 7. Cell Cycle Analysis
 
@@ -158,6 +159,8 @@ Lineage relationships
 ---
 ## Installation
 
+required to have the CHETAH_TME_reference.Rdata file from :  https://figshare.com/s/aaf026376912366f81b6
+
 Install the required packages in R:
 ```
 install.packages(c("Seurat"))
@@ -197,7 +200,7 @@ project/
                                                 ├── barcodes.tsv.gz
                                                 ├── features.tsv.gz
                                                 └── matrix.mtx.gz
-├── CHETAH_TME_reference.Rdata (missing)
+├── CHETAH_TME_reference.Rdata (missing download it from: https://figshare.com/s/aaf026376912366f81b6)
 ├── projetCode.html
 ├── projetCode.Rmd
 └── README.md
