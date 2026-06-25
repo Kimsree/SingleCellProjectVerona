@@ -1,12 +1,9 @@
-# SingleCellProjectVerona
+# SingleCellProjectVerona (a Multi-Omics Single Cell Analysis Project)
 ```
 Archivage d'un projet que j'ai fait en italie
 
-manque le fichier CHETAH_TME_reference.Rdata pour chetah.
+==manque le fichier CHETAH_TME_reference.Rdata pour chetah.==
 ```
-
-# Multi-Omics Single Cell Analysis
-
 A comprehensive single-cell multi-omics analysis workflow for preprocessing, quality control, cell annotation, cell-cell communication analysis, and trajectory inference.
 
 This project provides an end-to-end analysis pipeline for single-cell datasets using state-of-the-art R packages, allowing researchers to explore cellular heterogeneity, identify cell populations, investigate intercellular communication, and reconstruct developmental trajectories.
