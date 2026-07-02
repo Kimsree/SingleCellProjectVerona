@@ -89,6 +89,7 @@ Methods commonly include:
 PCA
 UMAP
 t-SNE
+
 4. Clustering
 
 Cells are grouped into clusters according to their transcriptional profiles, enabling the identification of distinct cell populations.
